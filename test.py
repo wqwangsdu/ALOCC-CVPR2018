@@ -16,7 +16,7 @@ flags.DEFINE_float("learning_rate", 0, "Learning rate of for adam [0.0002]")
 flags.DEFINE_float("beta1", 0.5, "Momentum term of adam [0.5]")
 flags.DEFINE_integer("attention_label", 1, "Conditioned label that growth attention of training label [1]")
 flags.DEFINE_float("r_alpha", 0.2, "Refinement parameter [0.2]")
-flags.DEFINE_integer("train_size", np.inf, "The size of train images [np.inf]")
+flags.DEFINE_float("train_size", np.inf, "The size of train images [np.inf]")
 flags.DEFINE_integer("batch_size", 128, "The size of batch images [64]")
 flags.DEFINE_integer("input_height", 45, "The size of image to use. [45]")
 flags.DEFINE_integer("input_width", None, "The size of image to use. If None, same value as input_height [None]")
@@ -29,6 +29,8 @@ flags.DEFINE_string("checkpoint_dir", "./checkpoint/UCSD_128_45_45/", "Directory
 flags.DEFINE_string("log_dir", "log", "Directory name to save the log [log]")
 flags.DEFINE_string("sample_dir", "samples", "Directory name to save the image samples [samples]")
 flags.DEFINE_boolean("train", False, "True for training, False for testing [False]")
+
+flags.DEFINE_integer("nStride", 10, "The stride length of ConvNet")
 
 FLAGS = flags.FLAGS
 
@@ -154,7 +156,7 @@ def main(_):
             #lst_image_paths = [tmp_lst_image_paths[x] for x in random.sample(range(0, len(tmp_lst_image_paths)), n_fetch_data)]
             lst_image_paths = tmp_lst_image_paths
             #images =read_lst_images(lst_image_paths,nd_patch_size,nd_patch_step,b_work_on_patch=False)
-            images = read_lst_images_w_noise2(lst_image_paths, nd_patch_size, nd_patch_step)
+            images = read_lst_images_w_noise2(lst_image_paths, nd_patch_size)
 
             lst_prob = process_frame(os.path.basename(s_image_dirs),images,tmp_ALOCC_model)
 

@@ -48,7 +48,7 @@ def read_image_w_noise(s_image_path):
     # image = scipy.misc.imresize(tmp_image, nd_img_size)
     return np.array(noisy)
 
-def read_lst_images_w_noise2(lst_images_path,nd_patch_size, n_patch_step):
+def read_lst_images_w_noise2(lst_images_path,nd_patch_size, n_patch_step=None):
     lst_images = []
     for image_path in lst_images_path:
         lst_images.append(read_image_w_noise(image_path))

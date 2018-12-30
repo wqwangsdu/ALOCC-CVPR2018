@@ -1,5 +1,6 @@
 from __future__ import division
 from tensorflow.examples.tutorials.mnist import input_data
+import tensorflow as tf
 import re
 from ops import *
 from utils import *
@@ -18,23 +19,23 @@ class ALOCC_Model(object):
                n_fetch_data=10, n_per_itr_print_results=500):
     """
     This is the main class of our Adversarially Learned One-Class Classifier for Novelty Detection
-    :param sess: TensorFlow session      
+    :param sess: TensorFlow session
     :param batch_size: The size of batch. Should be specified before training. [128]
     :param attention_label: Conditioned label that growth attention of training label [1]
-    :param r_alpha: Refinement parameter [0.2]        
-    :param z_dim:  (optional) Dimension of dim for Z. [100] 
-    :param gf_dim: (optional) Dimension of gen filters in first conv layer. [64] 
-    :param df_dim: (optional) Dimension of discrim filters in first conv layer. [64] 
-    :param gfc_dim: (optional) Dimension of gen units for for fully connected layer. [1024] 
-    :param dfc_dim: (optional) Dimension of discrim units for fully connected layer. [1024] 
-    :param c_dim: (optional) Dimension of image color. For grayscale input, set to 1. [3]  
+    :param r_alpha: Refinement parameter [0.2]
+    :param z_dim:  (optional) Dimension of dim for Z. [100]
+    :param gf_dim: (optional) Dimension of gen filters in first conv layer. [64]
+    :param df_dim: (optional) Dimension of discrim filters in first conv layer. [64]
+    :param gfc_dim: (optional) Dimension of gen units for for fully connected layer. [1024]
+    :param dfc_dim: (optional) Dimension of discrim units for fully connected layer. [1024]
+    :param c_dim: (optional) Dimension of image color. For grayscale input, set to 1. [3]
     :param sample_dir: Directory address which save some samples [.]
     :param kb_work_on_patch: Boolean value for working on PatchBased System or not [True]
-    :param nd_input_frame_size:  Input frame size 
+    :param nd_input_frame_size:  Input frame size
     :param nd_patch_size:  Input patch size
     :param n_stride: PatchBased data preprocessing stride
-    :param n_fetch_data: Fetch size of Data 
-    :param n_per_itr_print_results: # of printed iteration   
+    :param n_fetch_data: Fetch size of Data
+    :param n_per_itr_print_results: # of printed iteration
     """
 
     self.n_per_itr_print_results=n_per_itr_print_results
@@ -64,17 +65,13 @@ class ALOCC_Model(object):
     self.dfc_dim = dfc_dim
 
     # batch normalization : deals with poor initialization helps gradient flow
-    self.d_bn1 = batch_norm(name='d_bn1')
-    self.d_bn2 = batch_norm(name='d_bn2')
-    self.d_bn3 = batch_norm(name='d_bn3')
-    self.d_bn4 = batch_norm(name='d_bn4')
-    self.g_bn0 = batch_norm(name='g_bn0')
-    self.g_bn1 = batch_norm(name='g_bn1')
-    self.g_bn2 = batch_norm(name='g_bn2')
-    self.g_bn3 = batch_norm(name='g_bn3')
-    self.g_bn4 = batch_norm(name='g_bn4')
-    self.g_bn5 = batch_norm(name='g_bn5')
-    self.g_bn6 = batch_norm(name='g_bn6')
+    self.gconv_1 = batch_norm(name='gconv_1')
+    self.gconv_2 = batch_norm(name='gconv_2')
+    self.gdeconv_1 = batch_norm(name='gdeconv_1')
+
+    self.lstm2d1 = ConvLSTM2DCell(in_shape = 64, out_channels = 64, kernel_size = (3,3), batch_size = 5, name='lstm1')
+    self.lstm2d2 = ConvLSTM2DCell(in_shape = 64, out_channels = 32, kernel_size = (3,3), batch_size = 5, name='lstm2')
+    self.lstm2d3 = ConvLSTM2DCell(in_shape = 32, out_channels = 64, kernel_size = (3,3), batch_size = 5, name='lstm3')
 
     self.dataset_name = dataset_name
     self.dataset_address= dataset_address
@@ -271,7 +268,7 @@ class ALOCC_Model(object):
           _, summary_str = self.sess.run([g_optim, self.g_sum],
                                           feed_dict={ self.z: batch_noise_images })
           self.writer.add_summary(summary_str, counter)
-          
+
           errD_fake = self.d_loss_fake.eval({ self.z: batch_noise_images })
           errD_real = self.d_loss_real.eval({ self.inputs: batch_images })
           errG = self.g_loss.eval({self.z: batch_noise_images})
@@ -346,28 +343,26 @@ class ALOCC_Model(object):
   def generator(self, z):
     with tf.variable_scope("generator") as scope:
 
-      s_h, s_w = self.output_height, self.output_width
-      s_h2, s_w2 = conv_out_size_same(s_h, 2), conv_out_size_same(s_w, 2)
-      s_h4, s_w4 = conv_out_size_same(s_h2, 2), conv_out_size_same(s_w2, 2)
-      s_h8, s_w8 = conv_out_size_same(s_h4, 2), conv_out_size_same(s_w4, 2)
-      s_h16, s_w16 = conv_out_size_same(s_h8, 2), conv_out_size_same(s_w8, 2)
+      # s_h, s_w = self.output_height, self.output_width
+      # s_h2, s_w2 = conv_out_size_same(s_h, 2), conv_out_size_same(s_w, 2)
+      # s_h4, s_w4 = conv_out_size_same(s_h2, 2), conv_out_size_same(s_w2, 2)
+      # s_h8, s_w8 = conv_out_size_same(s_h4, 2), conv_out_size_same(s_w4, 2)
+      # s_h16, s_w16 = conv_out_size_same(s_h8, 2), conv_out_size_same(s_w8, 2)
 
-      hae0 = lrelu(self.g_bn4(conv2d(z   , self.df_dim * 2, name='g_encoder_h0_conv')))
-      hae1 = lrelu(self.g_bn5(conv2d(hae0, self.df_dim * 4, name='g_encoder_h1_conv')))
-      hae2 = lrelu(self.g_bn6(conv2d(hae1, self.df_dim * 8, name='g_encoder_h2_conv')))
+      #conv1 = tf.nn.conv2d(z, filter=(11,11,224,128), strides=(4,4), padding='SAME', name='conv1')
 
-      h2, self.h2_w, self.h2_b = deconv2d(
-        hae2, [self.batch_size, s_h4, s_w4, self.gf_dim*2], name='g_decoder_h1', with_w=True)
-      h2 = tf.nn.relu(self.g_bn2(h2))
+      conv1 = lrelu(self.gconv_1(conv2d(input_tensor, 128,  k_h=11, k_w=11, d_h=4, d_w=4, name="conv1")))
+      conv2 = lrelu(self.gconv_2(conv2d(conv1, 64, k_h=5, k_w=5, d_h=2, d_w=2, name="conv2")))
 
-      h3, self.h3_w, self.h3_b = deconv2d(
-          h2, [self.batch_size, s_h2, s_w2, self.gf_dim*1], name='g_decoder_h0', with_w=True)
-      h3 = tf.nn.relu(self.g_bn3(h3))
+      lstm1 = self.lstm2d1(conv2)
+      lstm2 = self.lstm2d2(lstm1)
+      lstm3 = self.lstm2d3(lstm2)
 
-      h4, self.h4_w, self.h4_b = deconv2d(
-          h3, [self.batch_size, s_h, s_w, self.c_dim], name='g_decoder_h00', with_w=True)
+      deconv1 = tf.nn.relu(self.gdeconv_1(deconv2d(lstm3, 128,  k_h=5, k_w=5, d_h=2, d_w=2, name='deconv1')))
+      decoded = deconv2d(deconv1, 1, k_h=11, k_w=11, d_h=4, d_w=4, name='deconv2')
 
-      return tf.nn.tanh(h4,name='g_output')
+
+      return decoded
 
   # =========================================================================================================
   def sampler(self, z, y=None):
