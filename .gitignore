@@ -100,10 +100,15 @@ ENV/
 # mypy
 .mypy_cache/
 
-checkpoint/
+.idea
 export/
-log/
-dataset/
-*.png
-.idea/
+image/
+checkpoint/
 samples/
+log/
+*.png
+*.jpg
+__pycache__
+venv
+.idea/vcs.xml
+dataset

@@ -11,13 +11,16 @@ flags.DEFINE_float("beta1", 0.5, "Momentum term of adam [0.5]")
 flags.DEFINE_integer("attention_label", 1, "Conditioned label that growth attention of training label [1]")
 flags.DEFINE_float("r_alpha", 0.2, "Refinement parameter [0.2]")
 flags.DEFINE_float("train_size", np.inf, "The size of train images [np.inf]")
-flags.DEFINE_integer("batch_size",128, "The size of batch images [64]")
+flags.DEFINE_integer("batch_size", 5, "The size of batch images [64]")
 flags.DEFINE_integer("input_height", 45, "The size of image to use. [45]")
 flags.DEFINE_integer("input_width", None, "The size of image to use. If None, same value as input_height [None]")
 flags.DEFINE_integer("output_height", 45, "The size of the output images to produce [45]")
 flags.DEFINE_integer("output_width", None, "The size of the output images to produce. If None, same value as output_height [None]")
-flags.DEFINE_string("dataset", "UCSD", "The name of dataset [UCSD, mnist]")
-flags.DEFINE_string("dataset_address", "./dataset/UCSD_Anomaly_Dataset.v1p2/UCSDped2/Train", "The path of dataset")
+## FIXME: Modified by lee
+# flags.DEFINE_string("dataset", "UCSD", "The name of dataset [UCSD, mnist, ped1_seq]")
+flags.DEFINE_string("dataset", "ped1_seq", "The name of dataset [UCSD, mnist, ped1_seq]")
+# flags.DEFINE_string("dataset_address", "./dataset/UCSD_Anormaly_Dataset.v1p2/UCSDped1/Train", "The path of dataset")
+flags.DEFINE_string("dataset_address", "./dataset/UCSD_PED1_t8_split", "The path of dataset")
 flags.DEFINE_string("input_fname_pattern", "*", "Glob pattern of filename of input images [*]")
 flags.DEFINE_string("checkpoint_dir", "checkpoint", "Directory name to save the checkpoints [checkpoint]")
 flags.DEFINE_string("log_dir", "log", "Directory name to save the log [log]")
@@ -44,7 +47,7 @@ def check_some_assertions():
 
 def main(_):
     """
-    The main function for training steps     
+    The main function for training steps
     """
     pp.pprint(flags.FLAGS.__flags)
     n_per_itr_print_results = 100

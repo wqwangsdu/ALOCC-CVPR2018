@@ -8,6 +8,7 @@ from PIL import Image, ImageDraw
 from scipy import ndimage, misc
 import scipy.misc
 import imageio
+import h5py
 
 # http://scikit-image.org/docs/dev/auto_examples/filters/plot_denoise.html
 from skimage.util import random_noise
@@ -24,6 +25,8 @@ def get_noisy_data(data):
     lst_noisy = []
     sigma = 0.155
     for image in data:
+        import ipdb
+        ipdb.set_trace()
         noisy = random_noise(image, var=sigma ** 2)
         lst_noisy.append(noisy)
     return np.array(lst_noisy)
@@ -39,10 +42,10 @@ def read_dataset_image_path(s_dataset_url, n_number_count=None):
 
     return lst_dir_inner_images_path
 
-
-
 def read_image_w_noise(s_image_path):
     tmp_image = read_image(s_image_path)
+    import ipdb
+    ipdb.set_trace()
     sigma = 0.155
     noisy = random_noise(tmp_image, var=sigma ** 2)
     # image = scipy.misc.imresize(tmp_image, nd_img_size)
@@ -459,3 +462,35 @@ def kh_getImages(sBaseImageFiles='',bGetSlice=True,ndSliceSize=(10,10),nStride=1
                           bSaveImages=bSaveImages)
     return ('','')
 
+def get_h5_sequence(root, data, idx, bs):
+    tmp_list = data[idx * bs : (idx+1) * bs]
+    im = read_seq_h5(root, tmp_list)
+    return im
+
+def get_h5_sequence_w_noise(root, data, idx, bs):
+    tmp_list = data[idx * bs : (idx+1) * bs]
+    im = read_seq_h5(root, tmp_list)
+    noised_seq = []
+    for i in range(im.shape[0]):
+        layer1 = im[i]
+        noised_layer1 = []
+        for j in range(layer1.shape[0]):
+            noised = random_noise(layer1[j][:,:,0])
+            reshaped_noised = noised[np.newaxis,:,:,np.newaxis]
+            noised_layer1.append(reshaped_noised)
+        noised_layer1 = np.concatenate(noised_layer1)[np.newaxis,:,:,:]
+        noised_seq.append(noised_layer1)
+    noised_seq = np.concatenate(noised_seq)
+
+    return noised_seq
+
+def read_seq_h5(root, lst):
+    tmp = []
+    for fn in lst:
+        path = os.path.join(root, fn)
+        with h5py.File(path, 'r') as f:
+            assert type(f['data'].value) is np.ndarray
+            tmp.append(f['data'].value)
+    tmp = np.concatenate(tmp)
+    assert len(tmp) == len(lst)
+    return tmp
