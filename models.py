@@ -65,17 +65,13 @@ class ALOCC_Model(object):
     self.dfc_dim = dfc_dim
 
     # batch normalization : deals with poor initialization helps gradient flow
-    self.d_bn1 = batch_norm(name='d_bn1')
-    self.d_bn2 = batch_norm(name='d_bn2')
-    self.d_bn3 = batch_norm(name='d_bn3')
-    self.d_bn4 = batch_norm(name='d_bn4')
-    self.g_bn0 = batch_norm(name='g_bn0')
-    self.g_bn1 = batch_norm(name='g_bn1')
-    self.g_bn2 = batch_norm(name='g_bn2')
-    self.g_bn3 = batch_norm(name='g_bn3')
-    self.g_bn4 = batch_norm(name='g_bn4')
-    self.g_bn5 = batch_norm(name='g_bn5')
-    self.g_bn6 = batch_norm(name='g_bn6')
+    self.gconv_1 = batch_norm(name='gconv_1')
+    self.gconv_2 = batch_norm(name='gconv_2')
+    self.gdeconv_1 = batch_norm(name='gdeconv_1')
+
+    self.lstm2d1 = ConvLSTM2DCell(in_shape = 64, out_channels = 64, kernel_size = (3,3), batch_size = 5, name='lstm1')
+    self.lstm2d2 = ConvLSTM2DCell(in_shape = 64, out_channels = 32, kernel_size = (3,3), batch_size = 5, name='lstm2')
+    self.lstm2d3 = ConvLSTM2DCell(in_shape = 32, out_channels = 64, kernel_size = (3,3), batch_size = 5, name='lstm3')
 
     self.dataset_name = dataset_name
     self.dataset_address= dataset_address
@@ -386,6 +382,7 @@ class ALOCC_Model(object):
 
       #conv1 = tf.nn.conv2d(z, filter=(11,11,224,128), strides=(4,4), padding='SAME', name='conv1')
 
+      '''
       conv1 = lrelu(batch_norm(conv2d(z, 128,  k_h=11, k_w=11, d_h=4, d_w=4, name="conv1")))
       conv2 = lrelu(batch_norm(conv2d(conv1, 64, k_h=5, k_w=5, d_h=2, d_w=2, name="conv2")))
 
@@ -394,8 +391,16 @@ class ALOCC_Model(object):
       lstm3 = lstm2d(lstm2, 64, k_h=3, k_w=3, name="lstm3")
 
       deconv1 = tf.nn.relu(batch_norm(deconv2d(lstm3, 128,  k_h=5, k_w=5, d_h=2, d_w=2, name='deconv1')))
-      decoded = deconv2d(deconv1, 1, k_h=11, k_w=11, d_h=4, d_w=4, name='deconv2')
+      '''
+      conv1 = lrelu(self.gconv_1(conv2d(input_tensor, 128,  k_h=11, k_w=11, d_h=4, d_w=4, name="conv1")))
+      conv2 = lrelu(self.gconv_2(conv2d(conv1, 64, k_h=5, k_w=5, d_h=2, d_w=2, name="conv2")))
 
+      lstm1 = self.lstm2d1(conv2)
+      lstm2 = self.lstm2d2(lstm1)
+      lstm3 = self.lstm2d3(lstm2)
+
+      deconv1 = tf.nn.relu(self.gdeconv_1(deconv2d(lstm3, 128,  k_h=5, k_w=5, d_h=2, d_w=2, name='deconv1')))
+      decoded = deconv2d(deconv1, 1, k_h=11, k_w=11, d_h=4, d_w=4, name='deconv2')
 
       return decoded
 

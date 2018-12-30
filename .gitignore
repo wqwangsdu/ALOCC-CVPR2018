@@ -108,3 +108,6 @@ samples/
 log/
 *.png
 *.jpg
+__pycache__
+venv
+.idea/vcs.xml
