@@ -1,5 +1,6 @@
 from __future__ import division
 from tensorflow.examples.tutorials.mnist import input_data
+import tensorflow as tf
 import re
 from ops import *
 from utils import *
@@ -105,11 +106,17 @@ class ALOCC_Model(object):
 
       self.data = lst_forced_fetch_data
       self.c_dim = 1
+
+    elif self.dataset_name == 'ped1_seq':
+
+      self.data = os.listdir(self.dataset_address)
+      self.c_dim = 1
+
     else:
       assert('Error in loading dataset')
 
     self.grayscale = (self.c_dim == 1)
-    self.build_model()
+    #self.build_model()
 
   # =========================================================================================================
   def build_model(self):
@@ -158,6 +165,7 @@ class ALOCC_Model(object):
 
 # =========================================================================================================
   def train(self, config):
+    """
     d_optim = tf.train.RMSPropOptimizer(config.learning_rate).minimize(self.d_loss, var_list=self.d_vars)
     g_optim = tf.train.RMSPropOptimizer(config.learning_rate).minimize(self.g_loss, var_list=self.g_vars)
 
@@ -178,6 +186,10 @@ class ALOCC_Model(object):
 
     self.writer = SummaryWriter(log_dir, self.sess.graph)
 
+    """
+
+    ## FIXME: sequence output to be done
+    """
     if config.dataset == 'mnist':
       sample = self.data[0:self.sample_num]
     elif config.dataset =='UCSD':
@@ -188,10 +200,14 @@ class ALOCC_Model(object):
       sample,_ = read_lst_images(sample_files, self.patch_size, self.patch_step, self.b_work_on_patch)
       sample = np.array(sample).reshape(-1, self.patch_size[0], self.patch_size[1], 1)
       sample = sample[0:self.sample_num]
+    elif config.dataset == 'ped1_seq':
+      import ipdb
+      ipdb.set_trace()
 
     # export images
     sample_inputs = np.array(sample).astype(np.float32)
     scipy.misc.imsave('./{}/train_input_samples.jpg'.format(config.sample_dir), montage(sample_inputs[:,:,:,0]))
+
 
     # load previous checkpoint
     counter = 1
@@ -201,8 +217,9 @@ class ALOCC_Model(object):
       print(" [*] Load SUCCESS")
     else:
       print(" [!] Load failed...")
+    """
 
-
+    ## FIXME: Remove mnist and uscd pipeline
     # load traning data
     if config.dataset == 'mnist':
       sample_w_noise = get_noisy_data(self.data)
@@ -212,13 +229,20 @@ class ALOCC_Model(object):
       sample = np.array(sample).reshape(-1, self.patch_size[0], self.patch_size[1], 1)
       sample_w_noise,_ = read_lst_images_w_noise(sample_files, self.patch_size, self.patch_step)
       sample_w_noise = np.array(sample_w_noise).reshape(-1, self.patch_size[0], self.patch_size[1], 1)
+    if config.dataset == 'ped1_seq':
+      sample = self.data
 
     for epoch in xrange(config.epoch):
       print('Epoch ({}/{})-------------------------------------------------'.format(epoch,config.epoch))
-      if config.dataset == 'mnist':
-        batch_idxs = min(len(self.data), config.train_size) // config.batch_size
-      elif config.dataset == 'UCSD':
+
+      if config.dataset == 'UCSD':
         batch_idxs = min(len(sample), config.train_size) // config.batch_size
+      elif config.dataset == 'mnist':
+        batch_idxs = min(len(self.data), config.train_size) // config.batch_size
+      elif config.dataset == 'ped1_seq':
+        batch_idxs = min(len(self.data), config.train_size) // config.batch_size
+        # batch_list = list(range(len(self.data)))
+        np.random.shuffle(self.data)
 
       # for detecting valuable epoch that we must stop training step
       # sample_input_for_test_each_train_step.npy
@@ -231,6 +255,14 @@ class ALOCC_Model(object):
         elif config.dataset == 'UCSD':
           batch = sample[idx * config.batch_size:(idx + 1) * config.batch_size]
           batch_noise = sample_w_noise[idx * config.batch_size:(idx + 1) * config.batch_size]
+        elif config.dataset == 'ped1_seq':
+          batch = get_h5_sequence(self.dataset_address, self.data, idx, config.batch_size)
+          batch_noise = get_h5_sequence_w_noise(self.dataset_address, self.data, idx, config.batch_size)
+          import ipdb
+          ipdb.set_trace()
+
+        import ipdb
+        ipdb.set_trace()
 
         batch_images = np.array(batch).astype(np.float32)
         batch_noise_images = np.array(batch_noise).astype(np.float32)
@@ -346,28 +378,26 @@ class ALOCC_Model(object):
   def generator(self, z):
     with tf.variable_scope("generator") as scope:
 
-      s_h, s_w = self.output_height, self.output_width
-      s_h2, s_w2 = conv_out_size_same(s_h, 2), conv_out_size_same(s_w, 2)
-      s_h4, s_w4 = conv_out_size_same(s_h2, 2), conv_out_size_same(s_w2, 2)
-      s_h8, s_w8 = conv_out_size_same(s_h4, 2), conv_out_size_same(s_w4, 2)
-      s_h16, s_w16 = conv_out_size_same(s_h8, 2), conv_out_size_same(s_w8, 2)
+      # s_h, s_w = self.output_height, self.output_width
+      # s_h2, s_w2 = conv_out_size_same(s_h, 2), conv_out_size_same(s_w, 2)
+      # s_h4, s_w4 = conv_out_size_same(s_h2, 2), conv_out_size_same(s_w2, 2)
+      # s_h8, s_w8 = conv_out_size_same(s_h4, 2), conv_out_size_same(s_w4, 2)
+      # s_h16, s_w16 = conv_out_size_same(s_h8, 2), conv_out_size_same(s_w8, 2)
 
-      hae0 = lrelu(self.g_bn4(conv2d(z   , self.df_dim * 2, name='g_encoder_h0_conv')))
-      hae1 = lrelu(self.g_bn5(conv2d(hae0, self.df_dim * 4, name='g_encoder_h1_conv')))
-      hae2 = lrelu(self.g_bn6(conv2d(hae1, self.df_dim * 8, name='g_encoder_h2_conv')))
+      #conv1 = tf.nn.conv2d(z, filter=(11,11,224,128), strides=(4,4), padding='SAME', name='conv1')
 
-      h2, self.h2_w, self.h2_b = deconv2d(
-        hae2, [self.batch_size, s_h4, s_w4, self.gf_dim*2], name='g_decoder_h1', with_w=True)
-      h2 = tf.nn.relu(self.g_bn2(h2))
+      conv1 = lrelu(batch_norm(conv2d(z, 128,  k_h=11, k_w=11, d_h=4, d_w=4, name="conv1")))
+      conv2 = lrelu(batch_norm(conv2d(conv1, 64, k_h=5, k_w=5, d_h=2, d_w=2, name="conv2")))
 
-      h3, self.h3_w, self.h3_b = deconv2d(
-          h2, [self.batch_size, s_h2, s_w2, self.gf_dim*1], name='g_decoder_h0', with_w=True)
-      h3 = tf.nn.relu(self.g_bn3(h3))
+      lstm1 = lstm2d(conv2, 64, k_h=3, k_w=3,name="lstm1")
+      lstm2 = lstm2d(lstm1, 32, k_h=3, k_w=3, name="lstm2")
+      lstm3 = lstm2d(lstm2, 64, k_h=3, k_w=3, name="lstm3")
 
-      h4, self.h4_w, self.h4_b = deconv2d(
-          h3, [self.batch_size, s_h, s_w, self.c_dim], name='g_decoder_h00', with_w=True)
+      deconv1 = tf.nn.relu(batch_norm(deconv2d(lstm3, 128,  k_h=5, k_w=5, d_h=2, d_w=2, name='deconv1')))
+      decoded = deconv2d(deconv1, 1, k_h=11, k_w=11, d_h=4, d_w=4, name='deconv2')
 
-      return tf.nn.tanh(h4,name='g_output')
+
+      return decoded
 
   # =========================================================================================================
   def sampler(self, z, y=None):

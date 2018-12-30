@@ -100,9 +100,11 @@ ENV/
 # mypy
 .mypy_cache/
 
-# for pycharm + by lee
 .idea
-__pycache__
-venv
-
-# test for pull
+export/
+image/
+checkpoint/
+samples/
+log/
+*.png
+*.jpg

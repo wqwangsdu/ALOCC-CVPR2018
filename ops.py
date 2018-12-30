@@ -66,6 +66,50 @@ def conv2d(input_, output_dim,
 
     return conv
 
+"""
+def lstm2d(input_,output_dim,k_h=5,k_w=5,name="lstm2d"):
+  with tf.variable_scope(name):
+    w = tf.get_variable('w', [k_h, k_w, input_.get_shape()[-1], output_dim])
+
+    # create a BasicLSTMCell
+    rnn_cell = tf.nn.rnn_cell.BasicLSTMCell(output_dim)
+
+    # 'outputs' is a tensor of shape [batch_size, max_time, cell_state_size]
+
+    # defining initial state
+    initial_state = rnn_cell.zero_state(batch_size, dtype=tf.float32)
+
+    # 'state' is a tensor of shape [batch_size, cell_state_size]
+    outputs, state = tf.nn.dynamic_rnn(rnn_cell, input_,
+                                       initial_state=initial_state,
+                                       dtype=tf.float32)
+    return outputs
+"""
+
+
+class ConvLSTM2DCell(object):
+  def __init__(self, in_shape, out_channels, kernel_size, batch_size,
+               conv_dims=2, use_bias=True, skip_connections=False,
+               forget_bias=1.0, initializer=None, name='ConvLSTM2DCell'):
+    with tf.variable_scope(name):
+        # defining default ConvLSTM2DCell
+        self.LSTMCell = tf.contrib.rnn.ConvLSTMCell(conv_ndims=conv_dims,
+                                                    input_shape=in_shape,
+                                                    out_channels=out_channels,
+                                                    kernel_shape=kernel_size)
+        self.batch_size = batch_size
+        self.name = name
+        self.init_state = self.LSTMCell.zero_state(batch_size, dtype=tf.float32)
+
+  def __call__(self, input_, state):
+    outputs, state = tf.nn.dynamic_rnn(self.LSTMCell, input_,
+                                       initial_state=self.init_state,
+                                       dtype=tf.float32,
+                                       scope=self.name)
+
+    return outputs, state
+
+
 def deconv2d(input_, output_shape,
        k_h=5, k_w=5, d_h=2, d_w=2, stddev=0.02,
        name="deconv2d", with_w=False):
