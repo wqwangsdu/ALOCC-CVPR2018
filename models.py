@@ -10,8 +10,8 @@ import matplotlib.pyplot as plt
 
 class ALOCC_Model(object):
   def __init__(self, sess,
-               input_height=45,input_width=45, output_height=64, output_width=64,
-               batch_size=128, sample_num = 128, attention_label=1, is_training=True,
+               input_height=224,input_width=224, seq_len = 8, output_height=64, output_width=64,
+               batch_size=10, sample_num = 128, attention_label=1, is_training=True,
                z_dim=100, gf_dim=16, df_dim=16, gfc_dim=512, dfc_dim=512, c_dim=3,
                dataset_name=None, dataset_address=None, input_fname_pattern=None,
                checkpoint_dir=None, log_dir=None, sample_dir=None, r_alpha = 0.2,
@@ -50,6 +50,8 @@ class ALOCC_Model(object):
 
     self.batch_size = batch_size
     self.sample_num = sample_num
+    ## FIXME 1/1 add seq_len into self
+    self.seq_len = seq_len
 
     self.input_height = input_height
     self.input_width = input_width
@@ -65,13 +67,21 @@ class ALOCC_Model(object):
     self.dfc_dim = dfc_dim
 
     # batch normalization : deals with poor initialization helps gradient flow
-    self.gconv_1 = batch_norm(name='gconv_1')
-    self.gconv_2 = batch_norm(name='gconv_2')
-    self.gdeconv_1 = batch_norm(name='gdeconv_1')
+    self.gconv_1 = batch_norm(name='g_conv_1')
+    self.gconv_2 = batch_norm(name='g_conv_2')
+    self.gdeconv_1 = batch_norm(name='g_deconv_1')
+    self.d_bn1 = batch_norm(name='d_bn1')
+    self.d_bn2 = batch_norm(name='d_bn2')
+    self.d_bn3 = batch_norm(name='d_bn3')
+    self.d_bn4 = batch_norm(name='d_bn4')
 
-    self.lstm2d1 = ConvLSTM2DCell(in_shape = 64, out_channels = 64, kernel_size = (3,3), batch_size = 5, name='lstm1')
-    self.lstm2d2 = ConvLSTM2DCell(in_shape = 64, out_channels = 32, kernel_size = (3,3), batch_size = 5, name='lstm2')
-    self.lstm2d3 = ConvLSTM2DCell(in_shape = 32, out_channels = 64, kernel_size = (3,3), batch_size = 5, name='lstm3')
+
+    self.lstm2d1 = ConvLSTM2DCell(in_shape = [28,28,64], out_channels = 64, kernel_size = [3,3],
+                                  batch_size = self.batch_size, name='g_lstm1')
+    self.lstm2d2 = ConvLSTM2DCell(in_shape = [28,28,64], out_channels = 32, kernel_size = [3,3],
+                                  batch_size = self.batch_size, name='g_lstm2')
+    self.lstm2d3 = ConvLSTM2DCell(in_shape = [28,28,32], out_channels = 64, kernel_size = [3,3],
+                                  batch_size = self.batch_size, name='g_lstm3')
 
     self.dataset_name = dataset_name
     self.dataset_address= dataset_address
@@ -112,25 +122,28 @@ class ALOCC_Model(object):
       assert('Error in loading dataset')
 
     self.grayscale = (self.c_dim == 1)
-    #self.build_model()
+    self.build_model()
 
   # =========================================================================================================
   def build_model(self):
     image_dims = [self.input_height, self.input_width, self.c_dim]
 
-    self.inputs = tf.placeholder(tf.float32, [self.batch_size] + image_dims, name='real_images')
+    ##FIXME 1/1 inputs of ConvNet has a shape of (bs*seq_len, h, w, channel)
+    self.inputs = tf.placeholder(tf.float32, [self.batch_size*self.seq_len] + image_dims, name='real_images')
     self.sample_inputs = tf.placeholder(tf.float32, [self.sample_num] + image_dims, name='sample_inputs')
 
     inputs = self.inputs
     sample_inputs = self.sample_inputs
 
-    self.z = tf.placeholder(tf.float32,[self.batch_size] + image_dims, name='z')
+    ##FIXME 1/1 inputs of ConvNet has a shape of (bs*seq_len, h, w, channel) as well as noise image z
+    self.z = tf.placeholder(tf.float32,[self.batch_size*self.seq_len] + image_dims, name='z')
 
-    self.G = self.generator(self.z)
-    self.D, self.D_logits = self.discriminator(inputs)
+    self.G, self.G_rnn = self.generator(self.z)
+    _, self.G_rnn_real = self.generator(self.inputs, reuse=True)
+    self.D, self.D_logits = self.discriminator(self.G_rnn_real)
 
-    self.sampler = self.sampler(self.z)
-    self.D_, self.D_logits_ = self.discriminator(self.G, reuse=True)
+    # self.sampler = self.sampler(self.z)
+    self.D_, self.D_logits_ = self.discriminator(self.G_rnn, reuse=True)
 
     # tesorboard setting
     # self.z_sum = histogram_summary("z", self.z)
@@ -148,6 +161,7 @@ class ALOCC_Model(object):
     self.g_loss  = self.g_loss + self.g_r_loss * self.r_alpha
     self.d_loss = self.d_loss_real + self.d_loss_fake
 
+
     self.d_loss_real_sum = scalar_summary("d_loss_real", self.d_loss_real)
     self.d_loss_fake_sum = scalar_summary("d_loss_fake", self.d_loss_fake)
     self.g_loss_sum = scalar_summary("g_loss", self.g_loss)
@@ -161,7 +175,7 @@ class ALOCC_Model(object):
 
 # =========================================================================================================
   def train(self, config):
-    """
+
     d_optim = tf.train.RMSPropOptimizer(config.learning_rate).minimize(self.d_loss, var_list=self.d_vars)
     g_optim = tf.train.RMSPropOptimizer(config.learning_rate).minimize(self.g_loss, var_list=self.g_vars)
 
@@ -182,10 +196,7 @@ class ALOCC_Model(object):
 
     self.writer = SummaryWriter(log_dir, self.sess.graph)
 
-    """
-
     ## FIXME: sequence output to be done
-    """
     if config.dataset == 'mnist':
       sample = self.data[0:self.sample_num]
     elif config.dataset =='UCSD':
@@ -197,13 +208,11 @@ class ALOCC_Model(object):
       sample = np.array(sample).reshape(-1, self.patch_size[0], self.patch_size[1], 1)
       sample = sample[0:self.sample_num]
     elif config.dataset == 'ped1_seq':
-      import ipdb
-      ipdb.set_trace()
+      pass
 
     # export images
-    sample_inputs = np.array(sample).astype(np.float32)
-    scipy.misc.imsave('./{}/train_input_samples.jpg'.format(config.sample_dir), montage(sample_inputs[:,:,:,0]))
-
+    #   sample_inputs = np.array(sample).astype(np.float32)
+    #   scipy.misc.imsave('./{}/train_input_samples.jpg'.format(config.sample_dir), montage(sample_inputs[:,:,:,0]))
 
     # load previous checkpoint
     counter = 1
@@ -213,7 +222,7 @@ class ALOCC_Model(object):
       print(" [*] Load SUCCESS")
     else:
       print(" [!] Load failed...")
-    """
+
 
     ## FIXME: Remove mnist and uscd pipeline
     # load traning data
@@ -242,7 +251,7 @@ class ALOCC_Model(object):
 
       # for detecting valuable epoch that we must stop training step
       # sample_input_for_test_each_train_step.npy
-      sample_test = np.load('SIFTETS.npy').reshape([504,45,45,1])[0:128]
+      # sample_test = np.load('SIFTETS.npy').reshape([504,45,45,1])[0:128]
 
       for idx in xrange(0, batch_idxs):
         if config.dataset == 'mnist':
@@ -254,11 +263,8 @@ class ALOCC_Model(object):
         elif config.dataset == 'ped1_seq':
           batch = get_h5_sequence(self.dataset_address, self.data, idx, config.batch_size)
           batch_noise = get_h5_sequence_w_noise(self.dataset_address, self.data, idx, config.batch_size)
-          import ipdb
-          ipdb.set_trace()
-
-        import ipdb
-        ipdb.set_trace()
+          batch = batch.reshape(-1, 224 ,224, 1)
+          batch_noise = batch_noise.reshape(-1, 224, 224, 1)
 
         batch_images = np.array(batch).astype(np.float32)
         batch_noise_images = np.array(batch_noise).astype(np.float32)
@@ -307,73 +313,105 @@ class ALOCC_Model(object):
         counter += 1
 
         msg = "Epoch:[%2d][%4d/%4d]--> d_loss: %.8f, g_loss: %.8f" % (epoch, idx, batch_idxs, errD_fake+errD_real, errG)
+
+        print("==============================================>>>>>")
         print(msg)
+        print("D fake error is {:.4f}, D real error is {:.4f}, G error is {:.4f}".format(errD_fake, errD_real, errG))
+        print("==============================================<<<<<")
         logging.info(msg)
 
-        if np.mod(counter, self.n_per_itr_print_results) == 0:
-          if config.dataset == 'mnist':
-            samples, d_loss, g_loss = self.sess.run(
-              [self.sampler, self.d_loss, self.g_loss],
-              feed_dict={
-                  self.z: sample_inputs,
-                  self.inputs: sample_inputs
-              }
-            )
-            manifold_h = int(np.ceil(np.sqrt(samples.shape[0])))
-            manifold_w = int(np.floor(np.sqrt(samples.shape[0])))
-            save_images(samples, [manifold_h, manifold_w],
-                  './{}/train_{:02d}_{:04d}.png'.format(config.sample_dir, epoch, idx))
-            print("[Sample] d_loss: %.8f, g_loss: %.8f" % (d_loss, g_loss))
+        # if np.mod(counter, self.n_per_itr_print_results) == 0:
+          # if config.dataset == 'mnist':
+          #   samples, d_loss, g_loss = self.sess.run(
+          #     [self.sampler, self.d_loss, self.g_loss],
+          #     feed_dict={
+          #         self.z: sample_inputs,
+          #         self.inputs: sample_inputs
+          #     }
+          #   )
+          #   manifold_h = int(np.ceil(np.sqrt(samples.shape[0])))
+          #   manifold_w = int(np.floor(np.sqrt(samples.shape[0])))
+          #   save_images(samples, [manifold_h, manifold_w],
+          #         './{}/train_{:02d}_{:04d}.png'.format(config.sample_dir, epoch, idx))
+          #   print("[Sample] d_loss: %.8f, g_loss: %.8f" % (d_loss, g_loss))
           # ====================================================================================================
-          else:
+          # else:
             #try:
-              samples, d_loss, g_loss = self.sess.run(
-                [self.sampler, self.d_loss, self.g_loss],
-                feed_dict={
-                    self.z: sample_inputs,
-                    self.inputs: sample_inputs,
-                },
-              )
+              # samples, d_loss, g_loss = self.sess.run(
+                # [self.sampler, self.d_loss, self.g_loss],
+                # feed_dict={
+                    # self.z: sample_inputs,
+                    # self.inputs: sample_inputs,
+                # },
+              # )
 
-              sample_test_out = self.sess.run(
-                [self.sampler],
-                feed_dict={
-                    self.z: sample_test
-                },
-              )
+              # sample_test_out = self.sess.run(
+              #   [self.sampler],
+              #   feed_dict={
+              #       self.z: sample_test
+              #   },
+              # )
               # export images
-              scipy.misc.imsave('./{}/z_test_{:02d}_{:04d}.png'.format(config.sample_dir, epoch, idx),
-                            montage(samples[:, :, :, 0]))
-
-              # export images
-              scipy.misc.imsave('./{}/train_{:02d}_{:04d}.png'.format(config.sample_dir, epoch, idx),
-                                montage(samples[:, :, :, 0]))
-
-              msg = "[Sample] d_loss: %.8f, g_loss: %.8f" % (d_loss, g_loss)
-              print(msg)
-              logging.info(msg)
+              # scipy.misc.imsave('./{}/z_test_{:02d}_{:04d}.png'.format(config.sample_dir, epoch, idx),
+              #               montage(samples[:, :, :, 0]))
+              #
+              # # export images
+              # scipy.misc.imsave('./{}/train_{:02d}_{:04d}.png'.format(config.sample_dir, epoch, idx),
+              #                   montage(samples[:, :, :, 0]))
+              #
+              # msg = "[Sample] d_loss: %.8f, g_loss: %.8f" % (d_loss, g_loss)
+              # print(msg)
+              # logging.info(msg)
 
       self.save(config.checkpoint_dir, epoch)
 
   # =========================================================================================================
-  def discriminator(self, image,reuse=False):
+  def discriminator(self, lstm3,reuse=False):
+    """
+    with tf.variable_scope("generator") as scope:
+      scope.reuse_variables()
+      conv1 = lrelu(self.gconv_1(conv2d(image, 128, k_h=11, k_w=11, d_h=4, d_w=4, name="g_conv1")))
+      conv2 = lrelu(self.gconv_2(conv2d(conv1, 64, k_h=5, k_w=5, d_h=2, d_w=2, name="g_conv2")))
+
+      conv2 = tf.reshape(conv2, (self.batch_size, self.seq_len, \
+                                 conv2.shape[1], conv2.shape[2], conv2.shape[3]))
+      lstm1, state1 = self.lstm2d1(conv2)
+      lstm2, state2 = self.lstm2d2(lstm1)
+      lstm3, state3 = self.lstm2d3(lstm2)
+
+      lstm3 = tf.reshape(lstm3, (-1, lstm3.shape[2], lstm3.shape[3], lstm3.shape[4]))
+    # deconv1 = tf.nn.relu(self.gdeconv_1(deconv2d(lstm3, 128,  k_h=5, k_w=5, d_h=2, d_w=2, name='deconv1')))
+    # deconv1 = tf.nn.relu(
+      # self.gdeconv_1(deconv2d(lstm3, [(self.batch_size) * (self.seq_len), 56, 56, 128], name='deconv1', with_w=False)))
+    # decoded = deconv2d(deconv1, 1, k_h=11, k_w=11, d_h=4, d_w=4, name='deconv2')
+    # decoded = deconv2d(deconv1, [(self.batch_size) * (self.seq_len), 224, 224, 1], name='deconv2')
+    """
     with tf.variable_scope("discriminator") as scope:
       if reuse:
         scope.reuse_variables()
-
-
-      h0 = lrelu(conv2d(image, self.df_dim, name='d_h0_conv'))
-      h1 = lrelu(self.d_bn1(conv2d(h0, self.df_dim*2, name='d_h1_conv')))
-      h2 = lrelu(self.d_bn2(conv2d(h1, self.df_dim*4, name='d_h2_conv')))
-      h3 = lrelu(self.d_bn3(conv2d(h2, self.df_dim*8, name='d_h3_conv')))
+      self.df_dim = lstm3.shape[3]
+      h0 = lrelu(conv2d(lstm3, self.df_dim, name='d_h0_conv'))
+      h1 = lrelu(self.d_bn1(conv2d(h0, self.df_dim * 2, name='d_h1_conv')))
+      h2 = lrelu(self.d_bn2(conv2d(h1, self.df_dim * 4, name='d_h2_conv')))
+      h3 = lrelu(self.d_bn3(conv2d(h2, self.df_dim * 8, name='d_h3_conv')))
       h4 = linear(tf.reshape(h3, [self.batch_size, -1]), 1, 'd_h3_lin')
-      h5 = tf.nn.sigmoid(h4,name='d_output')
+      h5 = tf.nn.sigmoid(h4, name='d_output')
       return h5, h4
 
-  # =========================================================================================================
-  def generator(self, z):
-    with tf.variable_scope("generator") as scope:
 
+      # h0 = lrelu(conv2d(image, self.df_dim, name='d_h0_conv'))
+      # h1 = lrelu(self.d_bn1(conv2d(h0, self.df_dim*2, name='d_h1_conv')))
+      # h2 = lrelu(self.d_bn2(conv2d(h1, self.df_dim*4, name='d_h2_conv')))
+      # h3 = lrelu(self.d_bn3(conv2d(h2, self.df_dim*8, name='d_h3_conv')))
+      # h4 = linear(tf.reshape(h3, [self.batch_size, -1]), 1, 'd_h3_lin')
+      # h5 = tf.nn.sigmoid(h4,name='d_output')
+      # return h5, h4
+
+  # =========================================================================================================
+  def generator(self, z, reuse=False):
+    with tf.variable_scope("generator") as scope:
+      if reuse:
+        scope.reuse_variables()
       # s_h, s_w = self.output_height, self.output_width
       # s_h2, s_w2 = conv_out_size_same(s_h, 2), conv_out_size_same(s_w, 2)
       # s_h4, s_w4 = conv_out_size_same(s_h2, 2), conv_out_size_same(s_w2, 2)
@@ -392,23 +430,29 @@ class ALOCC_Model(object):
 
       deconv1 = tf.nn.relu(batch_norm(deconv2d(lstm3, 128,  k_h=5, k_w=5, d_h=2, d_w=2, name='deconv1')))
       '''
-      conv1 = lrelu(self.gconv_1(conv2d(input_tensor, 128,  k_h=11, k_w=11, d_h=4, d_w=4, name="conv1")))
-      conv2 = lrelu(self.gconv_2(conv2d(conv1, 64, k_h=5, k_w=5, d_h=2, d_w=2, name="conv2")))
+      conv1 = lrelu(self.gconv_1(conv2d(z, 128,  k_h=11, k_w=11, d_h=4, d_w=4, name="g_conv1")))
+      conv2 = lrelu(self.gconv_2(conv2d(conv1, 64, k_h=5, k_w=5, d_h=2, d_w=2, name="g_conv2")))
+      ## FIXME 1/1 reshape conv2 into a 5D tensor
+      conv2 = tf.reshape(conv2, (self.batch_size, self.seq_len,\
+                                 conv2.shape[1], conv2.shape[2], conv2.shape[3]))
+      lstm1, state1 = self.lstm2d1(conv2)
+      lstm2, state2 = self.lstm2d2(lstm1)
+      lstm3, state3 = self.lstm2d3(lstm2)
 
-      lstm1 = self.lstm2d1(conv2)
-      lstm2 = self.lstm2d2(lstm1)
-      lstm3 = self.lstm2d3(lstm2)
+      lstm3 = tf.reshape(lstm3,(-1, lstm3.shape[2], lstm3.shape[3], lstm3.shape[4]))
+      # deconv1 = tf.nn.relu(self.gdeconv_1(deconv2d(lstm3, 128,  k_h=5, k_w=5, d_h=2, d_w=2, name='deconv1')))
+      deconv1 = tf.nn.relu(self.gdeconv_1(deconv2d(lstm3,[(self.batch_size)*(self.seq_len), 56, 56, 128],  k_h=5, k_w=5, d_h=2, d_w=2, name='g_deconv1', with_w=False)))
+      # decoded = deconv2d(deconv1, 1, k_h=11, k_w=11, d_h=4, d_w=4, name='deconv2')
+      decoded = deconv2d(deconv1, [(self.batch_size)*(self.seq_len), 224, 224, 1], k_h=11, k_w=11, d_h=4, d_w=4, name='g_deconv2')
 
-      deconv1 = tf.nn.relu(self.gdeconv_1(deconv2d(lstm3, 128,  k_h=5, k_w=5, d_h=2, d_w=2, name='deconv1')))
-      decoded = deconv2d(deconv1, 1, k_h=11, k_w=11, d_h=4, d_w=4, name='deconv2')
-
-      return decoded
+      ## FIXME 1/2 return lstm3 for D
+      return decoded, lstm3
 
   # =========================================================================================================
   def sampler(self, z, y=None):
     with tf.variable_scope("generator") as scope:
       scope.reuse_variables()
-
+      """
       s_h, s_w = self.output_height, self.output_width
       s_h2, s_w2 = conv_out_size_same(s_h, 2), conv_out_size_same(s_w, 2)
       s_h4, s_w4 = conv_out_size_same(s_h2, 2), conv_out_size_same(s_w2, 2)
@@ -431,7 +475,25 @@ class ALOCC_Model(object):
         h3, [self.batch_size, s_h, s_w, self.c_dim], name='g_decoder_h00', with_w=True)
 
       return tf.nn.tanh(h4,name='g_output')
+      """
+      conv1 = lrelu(self.gconv_1(conv2d(z, 128, k_h=11, k_w=11, d_h=4, d_w=4, name="g_conv1")))
+      conv2 = lrelu(self.gconv_2(conv2d(conv1, 64, k_h=5, k_w=5, d_h=2, d_w=2, name="g_conv2")))
 
+      conv2 = tf.reshape(conv2, (self.batch_size, self.seq_len, \
+                                 conv2.shape[1], conv2.shape[2], conv2.shape[3]))
+      lstm1, state1 = self.lstm2d1(conv2)
+      lstm2, state2 = self.lstm2d2(lstm1)
+      lstm3, state3 = self.lstm2d3(lstm2)
+
+    lstm3 = tf.reshape(lstm3, (-1, lstm3.shape[2], lstm3.shape[3], lstm3.shape[4]))
+    # deconv1 = tf.nn.relu(self.gdeconv_1(deconv2d(lstm3, 128,  k_h=5, k_w=5, d_h=2, d_w=2, name='deconv1')))
+    deconv1 = tf.nn.relu(
+      self.gdeconv_1(deconv2d(lstm3, [(self.batch_size) * (self.seq_len), 56, 56, 128],  k_h=5, k_w=5, d_h=2, d_w=2, name='g_deconv1', with_w=False)))
+    # decoded = deconv2d(deconv1, 1, k_h=11, k_w=11, d_h=4, d_w=4, name='deconv2')
+    decoded = deconv2d(deconv1, [(self.batch_size) * (self.seq_len), 224, 224, 1], k_h=11, k_w=11, d_h=4, d_w=4, name='g_deconv2')
+
+
+    return decoded, lstm3
   # =========================================================================================================
   @property
   def model_dir(self):
@@ -479,6 +541,8 @@ class ALOCC_Model(object):
     self.saver = tf.train.Saver()
 
     ckpt = tf.train.get_checkpoint_state(self.checkpoint_dir)
+    # import ipdb
+    # ipdb.set_trace()
     if ckpt and ckpt.model_checkpoint_path:
       ckpt_name = os.path.basename(ckpt.model_checkpoint_path)
       self.saver.restore(self.sess, os.path.join(self.checkpoint_dir, ckpt_name))
@@ -503,16 +567,20 @@ class ALOCC_Model(object):
   def f_test_frozen_model(self,lst_image_slices=[]):
     lst_generated_img= []
     lst_discriminator_v = []
-    tmp_shape = lst_image_slices.shape
+    # tmp_shape = lst_image_slices.shape
     if self.dataset_name=='UCSD':
+      tmp_shape = lst_image_slices.shape
       tmp_lst_slices = lst_image_slices.reshape(-1, tmp_shape[2], tmp_shape[3], 1)
-    else:
-      tmp_lst_slices = lst_image_slices
-    batch_idxs = len(tmp_lst_slices) // self.batch_size
+    elif self.dataset_name == 'ped1_seq':
+      tmp_lst_slices = [slice[:,:,:,np.newaxis] for slice in lst_image_slices]
+    # else:
+    #   tmp_lst_slices = lst_image_slices
+    total = len(tmp_lst_slices)
 
     print('start new process ...')
-    for i in xrange(0, batch_idxs):
-        batch_data = tmp_lst_slices[i * self.batch_size:(i + 1) * self.batch_size]
+    for i in xrange(0, total):
+        # batch_data = tmp_lst_slices[i * self.batch_size:(i + 1) * self.batch_size]
+        batch_data = tmp_lst_slices[i]
 
         results_g = self.sess.run(self.G, feed_dict={self.z: batch_data})
         results_d = self.sess.run(self.D_logits, feed_dict={self.inputs: batch_data})
@@ -524,12 +592,16 @@ class ALOCC_Model(object):
 
         lst_discriminator_v.extend(results_d)
         lst_generated_img.extend(results_g)
-        print('finish pp ... {}/{}'.format(i,batch_idxs))
+
+        print('finish pp ... {}/{}'.format(i,total))
+
+    return lst_discriminator_v, lst_generated_img
+
 
     #f = plt.figure()
     #plt.plot(np.array(lst_discriminator_v))
     #f.savefig('samples/d_values.jpg')
 
-    scipy.misc.imsave('./'+self.sample_dir+'/ALOCC_generated.jpg', montage(np.array(lst_generated_img)[:,:,:,0]))
-    scipy.misc.imsave('./'+self.sample_dir+'/ALOCC_input.jpg', montage(np.array(tmp_lst_slices)[:,:,:,0]))
+    # scipy.misc.imsave('./'+self.sample_dir+'/ALOCC_generated.jpg', montage(np.array(lst_generated_img)[:,:,:,0]))
+    # scipy.misc.imsave('./'+self.sample_dir+'/ALOCC_input.jpg', montage(np.array(tmp_lst_slices)[:,:,:,0]))
 

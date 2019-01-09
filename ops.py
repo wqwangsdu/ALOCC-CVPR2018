@@ -90,24 +90,45 @@ def lstm2d(input_,output_dim,k_h=5,k_w=5,name="lstm2d"):
 class ConvLSTM2DCell(object):
   def __init__(self, in_shape, out_channels, kernel_size, batch_size,
                conv_dims=2, use_bias=True, skip_connections=False,
-               forget_bias=1.0, initializer=None, name='ConvLSTM2DCell'):
+               forget_bias=1.0, initializer=None, name="ConvLSTM2D"):
     with tf.variable_scope(name):
         # defining default ConvLSTM2DCell
         self.LSTMCell = tf.contrib.rnn.ConvLSTMCell(conv_ndims=conv_dims,
                                                     input_shape=in_shape,
-                                                    out_channels=out_channels,
+                                                    output_channels=out_channels,
                                                     kernel_shape=kernel_size)
-        self.batch_size = batch_size
         self.name = name
+        self.batch_size = batch_size
         self.init_state = self.LSTMCell.zero_state(batch_size, dtype=tf.float32)
 
-  def __call__(self, input_, state):
+  # dynamic rnn
+  '''
+  def __call__(self, input_):
+    # assuming input_ has a shape of (bs, seq_len, h, w ,)
     outputs, state = tf.nn.dynamic_rnn(self.LSTMCell, input_,
                                        initial_state=self.init_state,
                                        dtype=tf.float32,
                                        scope=self.name)
 
     return outputs, state
+  '''
+  # static rnn
+  def __call__(self, inputs):
+      # assuming that inputs has a 5-D shape of (bs, seq_len, w, h, channel)
+      lstm_size = inputs.get_shape().as_list()[2:]
+      seq_len = inputs.get_shape().as_list()[1]
+
+      inputs = tf.transpose(inputs, ([1, 0, 2, 3, 4]))
+      inputs = tf.reshape(inputs, ([-1] + lstm_size))
+      inputs_split = tf.split(inputs, seq_len, 0)
+
+      outputs, state = tf.nn.static_rnn(self.LSTMCell, inputs_split,
+                                        initial_state=self.init_state,
+                                        dtype=tf.float32, scope=self.name)
+
+      outputs = tf.stack(outputs, axis=1)
+      ## TODO state to be done
+      return outputs, state
 
 
 def deconv2d(input_, output_shape,

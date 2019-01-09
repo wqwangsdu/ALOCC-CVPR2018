@@ -6,14 +6,15 @@ import tensorflow as tf
 
 flags = tf.app.flags
 flags.DEFINE_integer("epoch", 40, "Epoch to train [25]")
-flags.DEFINE_float("learning_rate", 0.002, "Learning rate of for adam [0.0002]")
+flags.DEFINE_integer("seq_len", 8, "seqence length")
+flags.DEFINE_float("learning_rate", 0.0001, "Learning rate of for adam [0.0002]")
 flags.DEFINE_float("beta1", 0.5, "Momentum term of adam [0.5]")
 flags.DEFINE_integer("attention_label", 1, "Conditioned label that growth attention of training label [1]")
-flags.DEFINE_float("r_alpha", 0.2, "Refinement parameter [0.2]")
+flags.DEFINE_float("r_alpha", 0.0, "Refinement parameter [0.2]")
 flags.DEFINE_float("train_size", np.inf, "The size of train images [np.inf]")
-flags.DEFINE_integer("batch_size", 5, "The size of batch images [64]")
-flags.DEFINE_integer("input_height", 45, "The size of image to use. [45]")
-flags.DEFINE_integer("input_width", None, "The size of image to use. If None, same value as input_height [None]")
+flags.DEFINE_integer("batch_size", 10, "The size of batch images [64]")
+flags.DEFINE_integer("input_height", 224, "The size of image to use. [45]")
+flags.DEFINE_integer("input_width", 224, "The size of image to use. If None, same value as input_height [None]")
 flags.DEFINE_integer("output_height", 45, "The size of the output images to produce [45]")
 flags.DEFINE_integer("output_width", None, "The size of the output images to produce. If None, same value as output_height [None]")
 ## FIXME: Modified by lee
@@ -62,7 +63,7 @@ def main(_):
     #FLAGS.dataset_address = './dataset/UCSD_Anomaly_Dataset.v1p2/UCSDped2/Train'
 
     nd_input_frame_size = (240, 360)
-    nd_slice_size = (45, 45)
+    nd_slice_size = (224, 224)
     n_stride = 25
     n_fetch_data = 600
     # ---------------------------------------------------------------------------------------------
@@ -74,12 +75,16 @@ def main(_):
 
     FLAGS.train = True
 
-    FLAGS.input_width = nd_slice_size[0]
-    FLAGS.input_height = nd_slice_size[1]
-    FLAGS.output_width = nd_slice_size[0]
-    FLAGS.output_height = nd_slice_size[1]
+    # FLAGS.input_width = nd_slice_size[0]
+    # FLAGS.input_height = nd_slice_size[1]
+    # FLAGS.input_width = input_width
+    # FLAGS.input_height = nd_slice_size[1]
 
-    FLAGS.sample_dir = 'export/'+FLAGS.dataset +'_%d.%d'%(nd_slice_size[0],nd_slice_size[1])
+    # FLAGS.output_width = nd_slice_size[0]
+    # FLAGS.output_height = nd_slice_size[1]
+
+    FLAGS.sample_dir = 'export/'+FLAGS.dataset +'_%d.%d'%(FLAGS.input_width,FLAGS.input_height)
+    # FLAGS.sample_dir = 'export/'+FLAGS.dataset +'_%d.%d'%(nd_slice_size[0],nd_slice_size[1])
     FLAGS.input_fname_pattern = '*'
 
     check_some_assertions()
@@ -94,6 +99,7 @@ def main(_):
                     sess,
                     input_width=FLAGS.input_width,
                     input_height=FLAGS.input_height,
+                    seq_len = FLAGS.seq_len,
                     output_width=FLAGS.output_width,
                     output_height=FLAGS.output_height,
                     batch_size=FLAGS.batch_size,
