@@ -26,10 +26,10 @@ flags.DEFINE_integer("output_height", 45, "The size of the output images to prod
 flags.DEFINE_integer("output_width", None, "The size of the output images to produce. If None, same value as output_height [None]")
 # flags.DEFINE_string("dataset", "UCSD", "The name of dataset [UCSD, mnist]")
 flags.DEFINE_string("dataset", "ped1_seq", "The name of dataset [UCSD, mnist, ped1_seq]")
-flags.DEFINE_string("dataset_address", "/home/ltj/codes/ALOCC_data_proc/share/videos/ped1/testing_frames_h5", "The path of dataset")
+flags.DEFINE_string("dataset_address", "/home/Wangwq/codes/split_dataset/share/data/videos/ped1/ped1_test_t8_splited/", "The path of dataset")
 # flags.DEFINE_string("dataset_address", "./dataset/UCSD_Anomaly_Dataset.v1p2/UCSDped2/Test", "The path of dataset")
 flags.DEFINE_string("input_fname_pattern", "*", "Glob pattern of filename of input images [*]")
-flags.DEFINE_string("checkpoint_dir", "./checkpoint/ped1_seq_10_45_45/", "Directory name to save the checkpoints [checkpobuint]")
+flags.DEFINE_string("checkpoint_dir", "./checkpoint/ped1_seq_1_45_45/", "Directory name to save the checkpoints [checkpobuint]")
 flags.DEFINE_string("log_dir", "log", "Directory name to save the log [log]")
 flags.DEFINE_string("sample_dir", "samples", "Directory name to save the image samples [samples]")
 flags.DEFINE_boolean("train", False, "True for training, False for testing [False]")
@@ -126,7 +126,10 @@ def main(_):
 
         print('--------------------------------------------------')
         print('Load Pretrained Model...')
-        tmp_ALOCC_model.f_check_checkpoint()
+        flag = tmp_ALOCC_model.f_check_checkpoint()
+        if flag == -1:
+            raise ValueError:
+                print('[!] Load checkpoint failed')
 
         if FLAGS.dataset=='mnist':
             mnist = input_data.read_data_sets(FLAGS.dataset_address)
@@ -147,7 +150,7 @@ def main(_):
 
         elif FLAGS.dataset =='ped1_seq':
             from scipy.stats import logistic
-            root = '/home/ltj/codes/ALOCC_data_proc/share/videos/ped1/testing_frames_h5'
+            root = '/home/Wangwq/codes/split_dataset/share/data/videos/ped1/ped1_test_t8_splited'
             lst = os.listdir(root)
             for fn in lst:
                 # import ipdb
@@ -210,8 +213,8 @@ def main(_):
                     continue
                 tmp_lst_image_paths.append(s_image_dir_files)
 
-        
-            
+
+
             #random
             #lst_image_paths = [tmp_lst_image_paths[x] for x in random.sample(range(0, len(tmp_lst_image_paths)), n_fetch_data)]
             lst_image_paths = tmp_lst_image_paths

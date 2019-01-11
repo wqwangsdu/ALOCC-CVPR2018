@@ -3,16 +3,16 @@ import numpy as np
 from models import ALOCC_Model
 from utils import pp, visualize, to_json, show_all_variables
 import tensorflow as tf
-
+os.environ['CUDA_VISIBLE_DEVICES']='2'
 flags = tf.app.flags
 flags.DEFINE_integer("epoch", 40, "Epoch to train [25]")
 flags.DEFINE_integer("seq_len", 8, "seqence length")
-flags.DEFINE_float("learning_rate", 0.0001, "Learning rate of for adam [0.0002]")
+flags.DEFINE_float("learning_rate", 0.00001, "Learning rate of for adam [0.0002]")
 flags.DEFINE_float("beta1", 0.5, "Momentum term of adam [0.5]")
 flags.DEFINE_integer("attention_label", 1, "Conditioned label that growth attention of training label [1]")
 flags.DEFINE_float("r_alpha", 0.0, "Refinement parameter [0.2]")
 flags.DEFINE_float("train_size", np.inf, "The size of train images [np.inf]")
-flags.DEFINE_integer("batch_size", 10, "The size of batch images [64]")
+flags.DEFINE_integer("batch_size", 20, "The size of batch images [64]")
 flags.DEFINE_integer("input_height", 224, "The size of image to use. [45]")
 flags.DEFINE_integer("input_width", 224, "The size of image to use. If None, same value as input_height [None]")
 flags.DEFINE_integer("output_height", 45, "The size of the output images to produce [45]")

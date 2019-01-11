@@ -491,6 +491,6 @@ def read_seq_h5(root, lst):
         with h5py.File(path, 'r') as f:
             assert type(f['data'].value) is np.ndarray
             tmp.append(f['data'].value)
-    tmp = np.concatenate(tmp)
+    tmp = np.stack(tmp)
     assert len(tmp) == len(lst)
     return tmp
