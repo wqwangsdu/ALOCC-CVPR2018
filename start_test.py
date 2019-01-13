@@ -19,7 +19,7 @@ flags.DEFINE_float("beta1", 0.5, "Momentum term of adam [0.5]")
 flags.DEFINE_integer("attention_label", 1, "Conditioned label that growth attention of training label [1]")
 flags.DEFINE_float("r_alpha", 0.2, "Refinement parameter [0.2]")
 flags.DEFINE_float("train_size", np.inf, "The size of train images [np.inf]")
-flags.DEFINE_integer("batch_size", 10, "The size of batch images [64]")
+flags.DEFINE_integer("batch_size", 1, "The size of batch images [64]")
 flags.DEFINE_integer("input_height", 224, "The size of image to use. [45]")
 flags.DEFINE_integer("input_width", 224, "The size of image to use. If None, same value as input_height [None]")
 flags.DEFINE_integer("output_height", 45, "The size of the output images to produce [45]")
@@ -129,7 +129,8 @@ def main(_):
         flag = tmp_ALOCC_model.f_check_checkpoint()
         if flag == -1:
             print('[!] Load checkpoint failed')
-            raise ValueError
+            import sys
+            sys.exit()
 
         if FLAGS.dataset=='mnist':
             mnist = input_data.read_data_sets(FLAGS.dataset_address)
@@ -150,6 +151,17 @@ def main(_):
 
         elif FLAGS.dataset =='ped1_seq':
             from scipy.stats import logistic
+            from matplotlib import pyplot as plt
+            import shutil
+            result_path = './test_result'
+
+            try:
+                shutil.rmtree(result_path)
+            except:
+                pass
+
+            os.mkdir(result_path)
+
             root = '/home/Wangwq/codes/split_dataset/share/data/videos/ped1/ped1_test_t8_splited'
             lst = os.listdir(root)
             for fn in lst:
@@ -172,8 +184,14 @@ def main(_):
                         tmp.append(f['data'].value)
                 lst_prob, generated = tmp_ALOCC_model.f_test_frozen_model(tmp)
                 probs = logistic.cdf(np.concatenate(lst_prob))
-                import ipdb
-                ipdb.set_trace()
+
+                T = np.array(range(len(probs)))
+                plt.plot(T, probs)
+                plt.savefig(os.path.join(result_path, fn.split('.')[0]+'.jpg'))
+                plt.clf()
+                plt.cla()
+                plt.close()
+
 
         # else in UCDS (depends on infrustructure)
         elif FLAGS.dataset == 'UCSD':
