@@ -113,3 +113,4 @@ venv
 .idea/vcs.xml
 dataset
 result*/*
+test_result/

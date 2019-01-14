@@ -24,7 +24,6 @@ flags.DEFINE_integer("input_height", 224, "The size of image to use. [45]")
 flags.DEFINE_integer("input_width", 224, "The size of image to use. If None, same value as input_height [None]")
 flags.DEFINE_integer("output_height", 45, "The size of the output images to produce [45]")
 flags.DEFINE_integer("output_width", None, "The size of the output images to produce. If None, same value as output_height [None]")
-# flags.DEFINE_string("dataset", "UCSD", "The name of dataset [UCSD, mnist]")
 flags.DEFINE_string("dataset", "ped1_seq", "The name of dataset [UCSD, mnist, ped1_seq]")
 flags.DEFINE_string("dataset_address", "/home/ltj/codes/split_dataset/share/data/videos/avenue/avenue_test_t8_splited/", "The path of dataset")
 # flags.DEFINE_string("dataset_address", "./dataset/UCSD_Anomaly_Dataset.v1p2/UCSDped2/Test", "The path of dataset")
@@ -165,22 +164,14 @@ def main(_):
             root = '/home/ltj/codes/split_dataset/share/data/videos/avenue/avenue_test_t8_splited'
             lst = os.listdir(root)
             for fn in lst:
-                # import ipdb
-                # ipdb.set_trace()
                 tmp = []
                 path = os.path.join(root, fn)
                 h5_lst = os.listdir(path)
                 h5_len = len(h5_lst)
                 for i in range(h5_len):
-
-                    # import ipdb
-                    # ipdb.set_trace()
                     h5_path = os.path.join(path, str(i) + '.h5')
                     with h5py.File(h5_path, 'r') as f:
                         # assert type(f['data'].value) is np.ndarray
-
-                        # import ipdb
-                        # ipdb.set_trace()
                         tmp.append(f['data'].value)
                 lst_prob, generated = tmp_ALOCC_model.f_test_frozen_model(tmp)
                 probs = logistic.cdf(np.concatenate(lst_prob))
