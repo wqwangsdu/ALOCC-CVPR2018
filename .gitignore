@@ -112,3 +112,4 @@ __pycache__
 venv
 .idea/vcs.xml
 dataset
+result*/*

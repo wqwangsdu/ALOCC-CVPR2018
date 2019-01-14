@@ -113,7 +113,7 @@ class ALOCC_Model(object):
       self.data = lst_forced_fetch_data
       self.c_dim = 1
 
-    elif self.dataset_name == 'ped1_seq':
+    elif self.dataset_name == 'ped1_seq' or self.dataset_name == 'avenue':
 
       self.data = os.listdir(self.dataset_address)
       self.c_dim = 1
@@ -157,7 +157,8 @@ class ALOCC_Model(object):
     self.g_loss = tf.reduce_mean(tf.nn.sigmoid_cross_entropy_with_logits(logits=self.D_logits_, labels=tf.ones_like(self.D_)))
 
     # Refinement loss
-    self.g_r_loss = tf.reduce_mean(tf.nn.sigmoid_cross_entropy_with_logits(logits=self.G,labels=self.z))
+    #self.g_r_loss = tf.reduce_mean(tf.nn.sigmoid_cross_entropy_with_logits(logits=self.G,labels=self.z))
+    self.g_r_loss = tf.reduce_mean(tf.losses.mean_squared_error(predictions=self.G,labels=self.z))
     self.g_loss  = self.g_loss + self.g_r_loss * self.r_alpha
     self.d_loss = self.d_loss_real + self.d_loss_fake
 
@@ -207,7 +208,7 @@ class ALOCC_Model(object):
       sample,_ = read_lst_images(sample_files, self.patch_size, self.patch_step, self.b_work_on_patch)
       sample = np.array(sample).reshape(-1, self.patch_size[0], self.patch_size[1], 1)
       sample = sample[0:self.sample_num]
-    elif config.dataset == 'ped1_seq':
+    elif config.dataset == 'ped1_seq' or config.dataset == 'avenue':
       pass
 
     # export images
@@ -234,7 +235,7 @@ class ALOCC_Model(object):
       sample = np.array(sample).reshape(-1, self.patch_size[0], self.patch_size[1], 1)
       sample_w_noise,_ = read_lst_images_w_noise(sample_files, self.patch_size, self.patch_step)
       sample_w_noise = np.array(sample_w_noise).reshape(-1, self.patch_size[0], self.patch_size[1], 1)
-    if config.dataset == 'ped1_seq':
+    if config.dataset == 'ped1_seq' or config.dataset == 'avenue':
       sample = self.data
 
     for epoch in xrange(config.epoch):
@@ -244,7 +245,7 @@ class ALOCC_Model(object):
         batch_idxs = min(len(sample), config.train_size) // config.batch_size
       elif config.dataset == 'mnist':
         batch_idxs = min(len(self.data), config.train_size) // config.batch_size
-      elif config.dataset == 'ped1_seq':
+      elif config.dataset == 'ped1_seq' or config.dataset == 'avenue':
         batch_idxs = min(len(self.data), config.train_size) // config.batch_size
         # batch_list = list(range(len(self.data)))
         np.random.shuffle(self.data)
@@ -260,55 +261,55 @@ class ALOCC_Model(object):
         elif config.dataset == 'UCSD':
           batch = sample[idx * config.batch_size:(idx + 1) * config.batch_size]
           batch_noise = sample_w_noise[idx * config.batch_size:(idx + 1) * config.batch_size]
-        elif config.dataset == 'ped1_seq':
+        elif config.dataset == 'ped1_seq' or config.dataset == 'avenue':
           batch = get_h5_sequence(self.dataset_address, self.data, idx, config.batch_size)
-          batch_noise = get_h5_sequence_w_noise(self.dataset_address, self.data, idx, config.batch_size)
+          # batch_noise = get_h5_sequence_w_noise(self.dataset_address, self.data, idx, config.batch_size)
           batch = batch.reshape(-1, 224 ,224, 1)
-          batch_noise = batch_noise.reshape(-1, 224, 224, 1)
+          # batch_noise = batch_noise.reshape(-1, 224, 224, 1)
 
         batch_images = np.array(batch).astype(np.float32)
-        batch_noise_images = np.array(batch_noise).astype(np.float32)
+        #batch_noise_images = np.array(batch_noise).astype(np.float32)
 
         batch_z = np.random.uniform(-1, 1, [config.batch_size, self.z_dim]).astype(np.float32)
 
         if config.dataset == 'mnist':
           # Update D network
           _, summary_str = self.sess.run([d_optim, self.d_sum],
-                                         feed_dict={self.inputs: batch_images, self.z: batch_noise_images})
+                                         feed_dict={self.inputs: batch_images, self.z: batch_images})
           self.writer.add_summary(summary_str, counter)
 
           # Update G network
           _, summary_str = self.sess.run([g_optim, self.g_sum],
-                                         feed_dict={self.z: batch_noise_images})
+                                         feed_dict={self.z: batch_images})
           self.writer.add_summary(summary_str, counter)
 
           # Run g_optim twice to make sure that d_loss does not go to zero (different from paper)
           _, summary_str = self.sess.run([g_optim, self.g_sum],
-                                         feed_dict={self.z: batch_noise_images})
+                                         feed_dict={self.z: batch_images})
           self.writer.add_summary(summary_str, counter)
 
-          errD_fake = self.d_loss_fake.eval({self.z: batch_noise_images})
+          errD_fake = self.d_loss_fake.eval({self.z: batch_images})
           errD_real = self.d_loss_real.eval({self.inputs: batch_images})
-          errG = self.g_loss.eval({self.z: batch_noise_images})
+          errG = self.g_loss.eval({self.z: batch_images})
         else:
           # update discriminator
           _, summary_str = self.sess.run([d_optim, self.d_sum],
-                                          feed_dict={ self.inputs: batch_images, self.z: batch_noise_images })
+                                          feed_dict={ self.inputs: batch_images, self.z: batch_images })
           self.writer.add_summary(summary_str, counter)
 
           # update refinement(generator)
           _, summary_str = self.sess.run([g_optim, self.g_sum],
-                                          feed_dict={ self.z: batch_noise_images })
+                                          feed_dict={ self.z: batch_images })
           self.writer.add_summary(summary_str, counter)
 
           # Run g_optim twice to make sure that d_loss does not go to zero (different from paper)
           _, summary_str = self.sess.run([g_optim, self.g_sum],
-                                          feed_dict={ self.z: batch_noise_images })
+                                          feed_dict={ self.z: batch_images })
           self.writer.add_summary(summary_str, counter)
 
-          errD_fake = self.d_loss_fake.eval({ self.z: batch_noise_images })
+          errD_fake = self.d_loss_fake.eval({ self.z: batch_images })
           errD_real = self.d_loss_real.eval({ self.inputs: batch_images })
-          errG = self.g_loss.eval({self.z: batch_noise_images})
+          errG = self.g_loss.eval({self.z: batch_images})
 
         counter += 1
 
@@ -571,7 +572,7 @@ class ALOCC_Model(object):
     if self.dataset_name=='UCSD':
       tmp_shape = lst_image_slices.shape
       tmp_lst_slices = lst_image_slices.reshape(-1, tmp_shape[2], tmp_shape[3], 1)
-    elif self.dataset_name == 'ped1_seq':
+    elif self.dataset_name == 'ped1_seq' or config.dataset_name == 'avenue':
       tmp_lst_slices = [slice[:,:,:,np.newaxis] for slice in lst_image_slices]
     # else:
     #   tmp_lst_slices = lst_image_slices
